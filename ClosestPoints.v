@@ -402,7 +402,7 @@ Proof.
                 match (fst (fst rest_k')) with
                   | inright pf1 => match lt_n_0 _ (lt_S_n _ _ (@eq_rect nat _ (fun n'' => _ < S n'') H _ pf1)) with end
                   | inleft fst_rest_k' =>
-                    if le_dec fst_rest_k' x
+                    if le_dec x fst_rest_k'
                     (** If we are smaller than the [k']th element, then we belong on the left, and can reuse the same value for the [S k']th element *)
                     then (inleft fst_rest_k',
                           Vector.cons _ x _ (snd (fst rest_k')),
@@ -455,19 +455,9 @@ Inductive vector_split_correct A : forall x y z, Vector.t A x -> Vector.t A y ->
 Local Notation "[]" := (Vector.nil _).
 Local Notation "h :: t" := (Vector.cons _ h _ t) (at level 60, right associativity).
 
-SearchAbout (div2 _ < _).
-SearchAbout (0 < _).
-Goal True.
-  pose ((fun n => (fun n => @vector_quick_select nat le le_dec (div2 (S n)) (S n) (lt_div2 _ (lt_0_Sn _))) (S n))) as H.
-  lazy beta iota zeta delta [vector_quick_select Fix Fix_F] in H.
-  simpl in H
-  pose 1 as One.
-  change 1 with One in H.
+Definition test_qselect := Eval lazy in (fun n => @vector_quick_select nat le le_dec (div2 (S n)) (S n) (lt_div2 _ (lt_0_Sn _))) _ (1::2::3::4::5::[]).
+Check eq_refl : test_qselect = (inleft 3, 1::2::[], 3::4::5::[]).
 
-  change 2 with (S One) in H.
-  set (One := 1) in *.
-
-  simpl in H.
 
 Fixpoint take_while A (f : A -> bool) n (v : Vector.t A n) : { x : nat & Vector.t A x }
   := match v with
