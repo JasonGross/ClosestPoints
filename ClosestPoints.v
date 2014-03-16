@@ -452,11 +452,13 @@ Inductive vector_split_correct A : forall x y z, Vector.t A x -> Vector.t A y ->
                   -> forall k,
                        vector_split_correct v1 (Vector.cons _ k _ v2) (Vector.cons _ k _ v3).
 
-Local Notation "[]" := (Vector.nil _).
-Local Notation "h :: t" := (Vector.cons _ h _ t) (at level 60, right associativity).
+Notation "[]" := (Vector.nil _) : vector_scope.
+Notation "h :: t" := (Vector.cons _ h _ t) (at level 60, right associativity) : vector_scope.
+Bind Scope vector_scope with Vector.t.
+Delimit Scope vector_scope with vector.
 
-Definition test_qselect := Eval lazy in (fun n => @vector_quick_select nat le le_dec (div2 (S n)) (S n) (lt_div2 _ (lt_0_Sn _))) _ (1::2::3::4::5::[]).
-Check eq_refl : test_qselect = (inleft 3, 1::2::[], 3::4::5::[]).
+Definition test_qselect := Eval lazy in (fun n => @vector_quick_select nat le le_dec (div2 (S n)) (S n) (lt_div2 _ (lt_0_Sn _))) _ (1::2::3::4::5::[])%vector.
+Check eq_refl : test_qselect = (inleft 3, 1::2::[], 3::4::5::[])%vector.
 
 
 Fixpoint take_while A (f : A -> bool) n (v : Vector.t A n) : { x : nat & Vector.t A x }
