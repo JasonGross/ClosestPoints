@@ -18,6 +18,8 @@ Local Open Scope string_scope.
 Local Open Scope list_scope.
 
 Module GridPrinter.
+  Local Transparent point pt_x pt_y Build_point.
+
   Fixpoint add_to_row (x : nat) (l : list bool) : list bool :=
     match x with
       | 0 => match l with
@@ -91,7 +93,14 @@ Module GridPrinter.
                                                             else " "
                                          end)
                                       l).
+  Goal True.
+    print_list ((1,1)::(2,3)::(4,5)::nil).
+    print_list_with_lines ((1,1)::(2,3)::(4,5)::nil) (3::nil).
+    print_list_with_lines ((1,1)::(2,3)::(4,5)::nil) (2::3::nil).
+  Abort.
 End GridPrinter.
+
+
 
 Section distance.
   Definition abs_minus (x y : nat) :=
@@ -297,7 +306,7 @@ Module NatPoint : Point.
   Definition y_le_dec : forall x y, {y_le x y} + {~y_le x y}
     := fun _ _ => le_dec _ _.
   Definition point_in_strip_close_enough (pt1 : t) (max_square_distance : distT) (pt2 : t) : bool
-    := if ((Nat.max (pt1.(y) - pt2.(y)) (pt2.(y) - pt1.(y))) ^ 2 <= max_square_distance)%bool
+    := if ((Nat.max (pt1.(y) - pt2.(y)) (pt2.(y) - pt1.(y))) ^ 2 <= 2 * max_square_distance)%bool
        then true
        else false.
 End NatPoint.
@@ -459,6 +468,19 @@ Delimit Scope vector_scope with vector.
 
 Definition test_qselect := Eval lazy in (fun n => @vector_quick_select nat le le_dec (div2 (S n)) (S n) (lt_div2 _ (lt_0_Sn _))) _ (1::2::3::4::5::[])%vector.
 Check eq_refl : test_qselect = (inleft 3, 1::2::[], 3::4::5::[])%vector.
+
+Lemma quick_select_correct A (le : A -> A -> Prop)
+      (le_dec : forall x y, {le x y} + {~le x y})
+      k n
+      (H : k < n)
+      (v : Vector.t A n)
+      (res := @vector_quick_select A le le_dec k n H v)
+: vector_split_correct (snd (fst res)) (snd res) v.
+Proof.
+  unfold vector_quick_select in res.
+  subst res.
+  erewrite Fix_eq.
+  revert k H.
 
 
 Fixpoint take_while A (f : A -> bool) n (v : Vector.t A n) : { x : nat & Vector.t A x }
@@ -635,3 +657,33 @@ Section alg.
 
   Notation
 <
+
+
+
+Require Import Omega Arith Max.
+
+Record point := pt { x : nat; y : nat }.
+
+
+Definition abs_diff (a b : nat) := max (a - b) (b - a).
+
+Definition sq a : nat := a * a.
+
+Definition sqdist (a b : point) : nat
+  := sq (abs_diff a.(x) b.(x)) + sq (abs_diff a.(y) b.(y)).
+
+Lemma triangle_ineq (a b c : point)
+: sqdist a c <= sqdist a b + sqdist b c.
+Proof.
+  unfold sqdist, abs_diff, sq.
+  destruct a, b, c; simpl in *.
+  SearchAbout max.
+  repeat match goal with
+           | [ |- context[max ?a ?b] ]
+             => let H := fresh "H" in
+                destruct (max_spec a b) as [[? H]|[? H]];
+                  rewrite !H; clear H
+         end.
+  rewrite !mult_minus_distr_r, !mult_minus_distr_l.
+
+  SearchAbout minus.
