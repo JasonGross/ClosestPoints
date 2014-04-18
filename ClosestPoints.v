@@ -3,6 +3,7 @@ Require Import List Ascii String Arith NPeano Sorted Program Setoid FMapAVL Wf W
 Require Import Utf8.
 
 Set Implicit Arguments.
+Generalizable All Variables.
 
 Local Open Scope list_scope.
 Local Open Scope string_scope.
@@ -94,9 +95,53 @@ Ltac tac_if tac := repeat tac_if' tac.
 Ltac case_eq_if' := tac_if' case_eq.
 Ltac case_eq_if := tac_if case_eq.
 
+(* [pose proof defn], but only if no hypothesis of the same type exists.
+   most useful for proofs of a proposition *)
+Tactic Notation "unique" "pose" "proof" constr(defn) :=
+  let T := type of defn in
+  match goal with
+    | [ H : T |- _ ] => fail 1
+    | _ => pose proof defn
+  end.
+
+(** [pose defn], but only if that hypothesis doesn't exist *)
+Tactic Notation "unique" "pose" constr(defn) :=
+  match goal with
+    | [ H := defn |- _ ] => fail 1
+    | _ => pose defn
+  end.
+
 Hint Extern 0 => match goal with H : False |- _ => destruct H end.
 Hint Extern 0 => match goal with H : None = Some _ |- _ => inversion H end.
 Hint Extern 0 => match goal with H : Some _ = None |- _ => inversion H end.
+Hint Extern 0 => match goal with H : false = true |- _ => inversion H end.
+Hint Extern 0 => match goal with H : true = false |- _ => inversion H end.
+Hint Extern 0 => match goal with H0 : ?T, H1 : ?T -> False |- _ => destruct (H1 H0) end.
+Hint Extern 0 => match goal with H0 : ?T, H1 : ~?T |- _ => destruct (H1 H0) end.
+Hint Extern 0 => match goal with H : None = Some _ |- _ => inversion H end.
+Hint Extern 0 => solve [ reflexivity ].
+Hint Extern 0 => match goal with H : Forall _ (_ :: _) |- _ => inversion_clear H end.
+
+Lemma eq_list_nil_dec {T} (l : list T) : {l = []} + {l <> []}.
+Proof.
+  destruct l; [ left; reflexivity | right; abstract inversion 1 ].
+Defined.
+
+Class Total {T} (R : relation T) := totality : forall x y, R x y \/ R y x.
+
+Class Decidable (P : Prop) := decide : {P} + {~P}.
+
+Arguments decide _ {_}.
+
+Lemma total_decidable_neg_flip `{Total T R, forall x y, Decidable (R x y)} x y
+: ~R x y -> R y x.
+Proof.
+  intro HR.
+  destruct (decide (R y x)); trivial.
+  exfalso; destruct (totality x y); auto.
+Qed.
+
+Hint Extern 2 => match goal with H : ~?R ?x ?y |- _ => unique pose proof (@total_decidable_neg_flip _ R _ _ x y H); try clear H end.
 
 (** ** Motivation *)
 (** "When doing formal program verification, take the simplest
@@ -251,21 +296,37 @@ Proof.
 
 (** We parameterize over a type of points. *)
 (** A [Point] is a [Type] together with a type of distances between points. *)
-
 Module Type Point.
   Axiom t : Type.
   Axiom distT : Type.
   Axiom dist_le : distT -> distT -> Prop.
   Axiom get_dist : t -> t -> distT.
   Axiom x_le : t -> t -> Prop.
-  Axiom x_le_dec : forall x y, {x_le x y} + {~x_le x y}.
-  Axiom dist_le_dec : forall x y, {dist_le x y} + {~dist_le x y}.
+  Context `{x_le_dec : forall x y, Decidable (x_le x y),
+              dist_le_dec : forall x y, Decidable (dist_le x y)}.
 
   Context `{x_le_preo : PreOrder _ x_le, dist_le_preo : PreOrder _ dist_le}.
+  (*Context `{x_le_paro : @PartialOrder _ eq _ x_le _, dist_le_paro : @PartialOrder _ eq _ dist_le _}.*)
+  Context `{x_le_total : Total _ x_le, dist_le_total : Total _ dist_le}.
+
+  Module Notations.
+    Delimit Scope dist_scope with dist.
+    Delimit Scope dec_dist_scope with dec_dist.
+
+    Infix "<=" := x_le : type_scope.
+    Infix "<=" := x_le_dec : dec_scope.
+    Infix "<=" := dist_le : dist_scope.
+    Infix "<=" := dist_le_dec : dec_dist_scope.
+
+    Infix "≤" := x_le : type_scope.
+    Infix "≤" := x_le_dec : dec_scope.
+    Infix "≤" := dist_le : dist_scope.
+    Infix "≤" := dist_le_dec : dec_dist_scope.
+  End Notations.
 End Point.
 
 (** Given a boolean relation, we can find the [f]-most element of a list. *)
-Definition get_func_bool {T} (f : T -> T -> bool) (H : forall x y z, f x y = true -> f y z = true -> f x z = true)
+Definition get_func_bool {T} (f : T -> T -> bool) (*H : forall x y z, f x y = true -> f y z = true -> f x z = true*)
            (ls : list T)
 : ls <> [] -> T
   := match ls with
@@ -275,24 +336,67 @@ Definition get_func_bool {T} (f : T -> T -> bool) (H : forall x y z, f x y = tru
                                       xs
      end.
 
-Program Definition get_func {T} {R} (f : forall x y : T, {R x y} + {~R x y}) `{Transitive _ R} (ls : list T)
+Program Definition get_func {T} {R} `{f : forall x y : T, Decidable (R x y)} (*`{Transitive _ R}*) (ls : list T)
 : ls <> [] -> T
-  := @get_func_bool _ (fun x y => if f x y then true else false) _ ls.
-Next Obligation.
+  := @get_func_bool _ (fun x y => if f x y then true else false) (*_*) ls.
+(*Next Obligation.
   abstract (
       destruct (f x y), (f y z), (f x z); hnf in *; firstorder eauto
     ).
-Defined.
+Defined.*)
+
+Section spec_get_func.
+  Local Hint Extern 1 => intros; etransitivity; eassumption.
+  Local Hint Extern 1 => eapply Forall_impl; [ | eassumption ].
+  Local Hint Extern 3 => progress case_eq_if.
+  Local Hint Constructors Forall.
+
+  Lemma spec_get_func {T} {R}
+        `{forall x y : T, Decidable (R x y)}
+        `{PartialOrder _ eq R, Total _ R}
+        (ls : list T)
+        (Hls : ls <> [])
+  : List.Forall (fun elem => R (get_func Hls) elem) ls.
+  Proof.
+    destruct ls; auto; simpl.
+    induction ls; auto;
+    try solve [ do 2 (reflexivity || constructor) ].
+    specialize (IHls (fun H => nil_cons (eq_sym H))).
+    constructor; simpl.
+    { eauto. }
+    { constructor; eauto. }
+  Qed.
+End spec_get_func.
+
 
 (** We can find the minimum or maximum of a list of points. *)
 Module MidStrip1D (point : Point).
+  Import point.Notations.
+  Local Infix "∈" := List.In (at level 40, no associativity).
+
   Definition get_left_most
   : forall ls : list point.t, ls <> [] -> point.t
-    := let _ := point.x_le_preo in get_func point.x_le_dec.
+    := (*let _ := point.x_le_preo in *)get_func point.x_le_dec.
 
   Definition get_right_most
   : forall ls : list point.t, ls <> [] -> point.t
-    := let _ := point.x_le_preo in @get_func _ (flip point.x_le) (fun x y => point.x_le_dec y x) _.
+    := (*let _ := point.x_le_preo in *)@get_func _ (flip point.x_le) (fun x y => point.x_le_dec y x) (*_*).
+
+  (** Given two strips, we can find the right-most left point and
+      left-most right point.  FIXME: Note: We don't handle duplicates correctly. *)
+  Definition right_most_left_most (ls_left ls_right : list point.t)
+             (H_left : ls_left <> []) (H_right : ls_right <> [])
+  : point.t * point.t
+    := (get_right_most H_left, get_left_most H_right).
+
+  Lemma right_most_left_most_correct
+        (ls_left ls_right : list point.t)
+        (H_left : ls_left <> []) (H_right : ls_right <> [])
+        (median : point.t)
+        (left_correct : List.Forall (fun pt => pt ≤ median) ls_left)
+        (right_correct : List.Forall (fun pt => median ≤ pt) ls_right)
+        (no_dup_median : (median ∈ ls_left /\ ¬ median ∈ ls_right) \/ (¬ median ∈ ls_right))
+        (triangle :
 End MidStrip1D.
 
 Module Type PointSet (point : Point).
