@@ -250,21 +250,50 @@ Proof.
 (** Now we implement the axtual algorithm. *)
 
 (** We parameterize over a type of points. *)
+(** A [Point] is a [Type] together with a type of distances between points. *)
 
 Module Type Point.
   Axiom t : Type.
   Axiom distT : Type.
-  Axiom min_dist : distT -> distT -> distT.
+  Axiom dist_le : distT -> distT -> Prop.
   Axiom get_dist : t -> t -> distT.
   Axiom x_le : t -> t -> Prop.
   Axiom x_le_dec : forall x y, {x_le x y} + {~x_le x y}.
+  Axiom dist_le_dec : forall x y, {dist_le x y} + {~dist_le x y}.
+
+  Context `{x_le_preo : PreOrder _ x_le, dist_le_preo : PreOrder _ dist_le}.
 End Point.
 
+(** Given a boolean relation, we can find the [f]-most element of a list. *)
+Definition get_func_bool {T} (f : T -> T -> bool) (H : forall x y z, f x y = true -> f y z = true -> f x z = true)
+           (ls : list T)
+: ls <> [] -> T
+  := match ls with
+       | [] => fun H => match H eq_refl : False with end
+       | x::xs => fun _ => fold_right (fun acc pt => if (f acc pt) then acc else pt)
+                                      x
+                                      xs
+     end.
+
+Program Definition get_func {T} {R} (f : forall x y : T, {R x y} + {~R x y}) `{Transitive _ R} (ls : list T)
+: ls <> [] -> T
+  := @get_func_bool _ (fun x y => if f x y then true else false) _ ls.
+Next Obligation.
+  abstract (
+      destruct (f x y), (f y z), (f x z); hnf in *; firstorder eauto
+    ).
+Defined.
+
+(** We can find the minimum or maximum of a list of points. *)
 Module MidStrip1D (point : Point).
-  Fixpoint get_min_and_max (ls : list point.t)
-  : match ls with
-      | nil => True
-      |
+  Definition get_left_most
+  : forall ls : list point.t, ls <> [] -> point.t
+    := let _ := point.x_le_preo in get_func point.x_le_dec.
+
+  Definition get_right_most
+  : forall ls : list point.t, ls <> [] -> point.t
+    := let _ := point.x_le_preo in @get_func _ (flip point.x_le) (fun x y => point.x_le_dec y x) _.
+End MidStrip1D.
 
 Module Type PointSet (point : Point).
   Axiom t : nat -> Type.
