@@ -86,6 +86,24 @@ Ltac destruct_exists := destruct_head_hnf @sigT;
     | [ |- @sigT2 ?T _ _ ] => destruct_exists' T
   end.
 
+(** fail if [x] is a function application, a dependent product ([fun _
+    => _]), or a sigma type ([forall _, _]) *)
+Ltac atomic x :=
+  match x with
+    | ?f _ => fail 1 x "is not atomic (application)"
+    | (fun _ => _) => fail 1 x "is not atomic (fun)"
+    | forall _, _ => fail 1 x "is not atomic (forall)"
+    | _ => is_fix x; fail 1 x "is not atomic (fix)"
+    | _ => idtac
+  end.
+
+(** [destruct] discriminees of [match]es, but only if they satisfy [tac] (e.g., [atomic] *)
+Ltac destruct_in_match_if' tac :=
+  match goal with
+    | [ |- appcontext[match ?D with _ => _ end] ] => tac D; destruct D
+  end.
+Ltac destruct_in_match_if tac := repeat destruct_in_match_if' tac.
+
 (** [destruct] things in [if]s *)
 Ltac tac_if' tac :=
   match goal with
@@ -94,6 +112,26 @@ Ltac tac_if' tac :=
 Ltac tac_if tac := repeat tac_if' tac.
 Ltac case_eq_if' := tac_if' case_eq.
 Ltac case_eq_if := tac_if case_eq.
+
+Ltac do_with_hyp tac :=
+  match goal with
+    | [ H : _ |- _ ] => tac H
+  end.
+
+Ltac rewrite_hyp' := do_with_hyp ltac:(fun H => rewrite H).
+Ltac rewrite_hyp := repeat rewrite_hyp'.
+Ltac rewrite_rev_hyp' := do_with_hyp ltac:(fun H => rewrite <- H).
+Ltac rewrite_rev_hyp := repeat rewrite_rev_hyp'.
+
+Ltac setoid_rewrite_hyp' := do_with_hyp ltac:(fun H => setoid_rewrite H).
+Ltac setoid_rewrite_hyp := repeat setoid_rewrite_hyp'.
+Ltac setoid_rewrite_rev_hyp' := do_with_hyp ltac:(fun H => setoid_rewrite <- H).
+Ltac setoid_rewrite_rev_hyp := repeat setoid_rewrite_rev_hyp'.
+
+Ltac apply_hyp' := do_with_hyp ltac:(fun H => apply H).
+Ltac apply_hyp := repeat apply_hyp'.
+Ltac eapply_hyp' := do_with_hyp ltac:(fun H => eapply H).
+Ltac eapply_hyp := repeat eapply_hyp'.
 
 (* [pose proof defn], but only if no hypothesis of the same type exists.
    most useful for proofs of a proposition *)
@@ -121,6 +159,9 @@ Hint Extern 0 => match goal with H0 : ?T, H1 : ~?T |- _ => destruct (H1 H0) end.
 Hint Extern 0 => match goal with H : None = Some _ |- _ => inversion H end.
 Hint Extern 0 => solve [ reflexivity ].
 Hint Extern 0 => match goal with H : Forall _ (_ :: _) |- _ => inversion_clear H end.
+Hint Extern 0 => match goal with H : ?x <> ?x |- _ => destruct (H eq_refl) end.
+Hint Extern 0 => match goal with H : lt _ 0 |- _ => destruct (@lt_n_0 _ H) end.
+Hint Extern 0 => match goal with |- appcontext[match ?E with end] => destruct E end.
 
 Lemma eq_list_nil_dec {T} (l : list T) : {l = []} + {l <> []}.
 Proof.
@@ -133,6 +174,13 @@ Class Decidable (P : Prop) := decide : {P} + {~P}.
 
 Arguments decide _ {_}.
 
+Instance le_total : Total le.
+Proof.
+  intros x y.
+  destruct (le_lt_dec x y); [ left; assumption | right ].
+  etransitivity; try eassumption; hnf; auto with arith.
+Defined.
+
 Lemma total_decidable_neg_flip `{Total T R, forall x y, Decidable (R x y)} x y
 : ~R x y -> R y x.
 Proof.
@@ -142,6 +190,8 @@ Proof.
 Qed.
 
 Hint Extern 2 => match goal with H : ~?R ?x ?y |- _ => unique pose proof (@total_decidable_neg_flip _ R _ _ x y H); try clear H end.
+
+Infix "∈" := List.In (at level 40, no associativity).
 
 (** ** Motivation *)
 (** "When doing formal program verification, take the simplest
@@ -351,7 +401,7 @@ Section spec_get_func.
   Local Hint Extern 3 => progress case_eq_if.
   Local Hint Constructors Forall.
 
-  Lemma spec_get_func {T} {R}
+  Lemma spec_rel_get_func {T} {R}
         `{forall x y : T, Decidable (R x y)}
         `{PartialOrder _ eq R, Total _ R}
         (ls : list T)
@@ -366,17 +416,31 @@ Section spec_get_func.
     { eauto. }
     { constructor; eauto. }
   Qed.
-End spec_get_func.
 
+  Lemma spec_in_get_func {T} {R}
+        `{forall x y : T, Decidable (R x y)}
+        `{PartialOrder _ eq R, Total _ R}
+        (ls : list T)
+        (Hls : ls <> [])
+  : get_func Hls ∈ ls.
+  Proof.
+    destruct ls; eauto.
+    simpl; clear Hls.
+    induction ls; try solve [ intuition ].
+    destruct_head or; simpl in *;
+    rewrite_rev_hyp;
+    case_eq_if;
+    try solve [ intuition ].
+  Qed.
+End spec_get_func.
 
 (** We can find the minimum or maximum of a list of points. *)
 Module MidStrip1D (point : Point).
   Import point.Notations.
-  Local Infix "∈" := List.In (at level 40, no associativity).
 
   Definition get_left_most
   : forall ls : list point.t, ls <> [] -> point.t
-    := (*let _ := point.x_le_preo in *)get_func point.x_le_dec.
+    := let _ := point.x_le_dec in get_func.
 
   Definition get_right_most
   : forall ls : list point.t, ls <> [] -> point.t
@@ -389,14 +453,14 @@ Module MidStrip1D (point : Point).
   : point.t * point.t
     := (get_right_most H_left, get_left_most H_right).
 
-  Lemma right_most_left_most_correct
+  (*Lemma right_most_left_most_correct
         (ls_left ls_right : list point.t)
         (H_left : ls_left <> []) (H_right : ls_right <> [])
         (median : point.t)
         (left_correct : List.Forall (fun pt => pt ≤ median) ls_left)
         (right_correct : List.Forall (fun pt => median ≤ pt) ls_right)
         (no_dup_median : (median ∈ ls_left /\ ¬ median ∈ ls_right) \/ (¬ median ∈ ls_right))
-        (triangle :
+        (triangle :*)
 End MidStrip1D.
 
 Module Type PointSet (point : Point).
@@ -487,24 +551,30 @@ End tree.
 Module ClosestPoints (point : Point) (point_set : PointSet point).
   (** At each node of the tree, we store the left point-set, the right point-set, and a function that takes the distance and provides us with a strip of point-lists to inspect.  At each leaf, which represents at most three points, we store the minimum square distance. *)
 
-  Hint Resolve div2_decr le_n_S lt_n_S le_n_S.
-  Hint Constructors le.
-  Hint Extern 2 => progress hnf.
-  Hint Extern 2 => progress simpl.
-  Hint Extern 2 => progress subst.
-  Hint Extern 2 => unfold lt.
+  Local Hint Resolve div2_decr le_n_S lt_n_S le_n_S.
+  Local Hint Constructors le.
+  Local Hint Extern 2 => progress hnf.
+  Local Hint Extern 2 => progress simpl.
+  Local Hint Extern 2 => progress subst.
+  Local Hint Extern 2 => unfold lt.
 
-  Definition make_algorithm_tree_from_point_set
-           (n : nat) (points : point_set.t n)
-  : (tree ({ x : _ & point_set.t x } *
-           { x : _ & point_set.t x } *
+  Definition make_algorithm_tree_from_point_set__helper
+  : ∀ x : nat,
+      (∀ y : nat,
+         y < x
+         → point_set.t y
+         → tree
+             ({x0 : nat & point_set.t x0} * {x0 : nat & point_set.t x0} *
+              point_set.split_marker *
+              (point.distT → list (point.t * {x0 : nat & point_set.t x0})))
+             point.distT + ({y = 0} + {y = 1}))
+      → point_set.t x
+      → tree
+          ({x0 : nat & point_set.t x0} * {x0 : nat & point_set.t x0} *
            point_set.split_marker *
-           (point.distT -> list (point.t * { x : _ & point_set.t x })))
-          point.distT)
-    + ({n = 0} + {n = 1}).
+           (point.distT → list (point.t * {x0 : nat & point_set.t x0})))
+          point.distT + ({x = 0} + {x = 1}).
   Proof.
-    revert points.
-    apply (Fix lt_wf) with (x := n); clear n.
     intros n make_algorithm_tree_from_point_set.
     refine (match n as n' return n' = n -> point_set.t n' -> _ + ({n' = 0} + {n' = 1}) with
               | 0 => fun _ _ => inr (left eq_refl)
@@ -532,8 +602,8 @@ Module ClosestPoints (point : Point) (point_set : PointSet point).
                                            | inr _ => None
                                          end))
             end eq_refl);
-      auto;
-      subst.
+    auto;
+    subst.
     cbv beta iota zeta delta [div2].
     fold div2.
     repeat rewrite Nat.sub_succ.
@@ -543,23 +613,38 @@ Module ClosestPoints (point : Point) (point_set : PointSet point).
       eapply le_minus.
     * auto.
   Defined.
+
+  Definition make_algorithm_tree_from_point_set
+           (n : nat) (points : point_set.t n)
+  : (tree ({ x : _ & point_set.t x } *
+           { x : _ & point_set.t x } *
+           point_set.split_marker *
+           (point.distT -> list (point.t * { x : _ & point_set.t x })))
+          point.distT)
+    + ({n = 0} + {n = 1}).
+  Proof.
+    revert points.
+    apply (Fix lt_wf) with (x := n); clear n.
+    exact make_algorithm_tree_from_point_set__helper.
+  Defined.
 End ClosestPoints.
 
 Module NatPoint : Point.
-  Definition t := point.
+  Definition t := nat.
   Definition distT := nat.
   Definition min_dist := min.
-  Definition get_dist (x y : point) := ∥ x -- y ∥².
-  Definition x_le p1 p2 := le p1.(x) p2.(x).
-  Definition y_le p1 p2 := le p1.(y) p2.(y).
-  Definition x_le_dec : forall x y, {x_le x y} + {~x_le x y}
-    := fun _ _ => le_dec _ _.
-  Definition y_le_dec : forall x y, {y_le x y} + {~y_le x y}
-    := fun _ _ => le_dec _ _.
-  Definition point_in_strip_close_enough (pt1 : t) (max_square_distance : distT) (pt2 : t) : bool
-    := if ((Nat.max (pt1.(y) - pt2.(y)) (pt2.(y) - pt1.(y))) ^ 2 <= 2 * max_square_distance)%bool
-       then true
-       else false.
+  Definition get_dist (x y : t) := ∥' x -- y '∥.
+  Definition x_le : t -> t -> Prop := le.
+  Definition dist_le : distT -> distT -> Prop := le.
+
+  Definition x_le_dec := le_dec.
+  Definition dist_le_dec := le_dec.
+  Instance x_le_preo : PreOrder x_le := _.
+  Instance dist_le_preo : PreOrder dist_le := _.
+  Instance x_le_total : Total x_le := _.
+  Instance dist_le_total : Total dist_le := _.
+  Module Notations.
+  End Notations.
 End NatPoint.
 
 Module Type SplitMarker (point : Point).
@@ -624,16 +709,40 @@ Definition vector_partition_at_most A (f : A -> bool) (at_most : nat) n (v : Vec
                       0
                       v.
 
-(** We get the [k]th largest element (0 means smallest), and partition the array into elements [<=] the [k]th one, andx [>=] the [k]th one.  The [k]th element sits in the second vector.  If [k > n], then the first list contains everything, and the second list is [nil]. *)
-Definition vector_quick_select A (le : A -> A -> Prop)
-         (le_dec : forall x y, {le x y} + {~le x y})
-         k n
-         (H : k < n)
-         (v : Vector.t A n)
-: (A + {n = 0}) * Vector.t A k * Vector.t A (n - k).
+Definition vector_transport_minus
+: ∀ (A : Type) (k' : nat),
+    A
+    → ∀ n'' : nat,
+        S k' < n'' → Vector.t A (n'' - S k') → Vector.t A (n'' - k').
 Proof.
-  revert k H v.
-  apply (Fix lt_wf) with (x := n); clear n.
+  intros A k' x.
+  induction k'.
+  - intros n'' H v.
+    destruct n'' as [|[|n'']].
+    + exact (Vector.nil _).
+    + exact (Vector.cons _ x _ v).
+    + exact (Vector.cons _ x _ v).
+  - intros n'' H v.
+    destruct n'' as [|[|n'']].
+    + exact (Vector.nil _).
+    + exact (Vector.nil _).
+    + exact (IHk' _ (lt_S_n _ _ H) v).
+Defined.
+
+Definition vector_quick_select_helper
+: ∀ (A : Type) (le : A → A → Prop),
+    (∀ x y : A, {le x y} + {¬le x y})
+    → ∀ x : nat,
+        (∀ y : nat,
+           y < x
+           → ∀ k : nat,
+               k < y
+               → Vector.t A y → (A + {y = 0}) * Vector.t A k * Vector.t A (y - k))
+        → ∀ k : nat,
+            k < x
+            → Vector.t A x → (A + {x = 0}) * Vector.t A k * Vector.t A (x - k).
+Proof.
+  intros A le le_dec.
   intros n vector_quick_select k H v.
   refine (match v as v' in Vector.t _ n', k as k' return
                 n' = n -> k' < n' -> (A + {n' = 0}) * Vector.t A k' * Vector.t A (n' - k')
@@ -681,44 +790,60 @@ Proof.
                                 | inleft fst_rest_Sk' => inleft fst_rest_Sk'
                               end,
                               snd (fst rest_Sk'),
-                              _ x (Sk'_lt_n'') (snd rest_Sk'))
+                              vector_transport_minus x (Sk'_lt_n'') (snd rest_Sk'))
                          end
                 end
           end eq_refl H);
-    try solve [ subst; eauto ].
-  clear.
-  intros x H v; simpl; revert n'' H v.
-  induction k'.
-  - intros n'' H v.
-    destruct n'' as [|[|n'']].
-    + exact (Vector.nil _).
-    + exact (Vector.cons _ x _ v).
-    + exact (Vector.cons _ x _ v).
-  - intros n'' H v.
-    destruct n'' as [|[|n'']].
-    + exact (Vector.nil _).
-    + exact (Vector.nil _).
-    + exact (IHk' _ (lt_S_n _ _ H) v).
+    solve [ subst; eauto ].
 Defined.
 
-Inductive vector_split_correct A : forall x y z, Vector.t A x -> Vector.t A y -> Vector.t A z -> Type :=
-| split_nil : vector_split_correct (Vector.nil _) (Vector.nil _) (Vector.nil _)
+(** We get the [k]th largest element (0 means smallest), and partition the array into elements [<=] the [k]th one, andx [>=] the [k]th one.  The [k]th element sits in the second vector.  If [k > n], then the first list contains everything, and the second list is [nil]. *)
+Definition vector_quick_select A (le : A -> A -> Prop)
+         (le_dec : forall x y, {le x y} + {~le x y})
+         k n
+         (H : k < n)
+         (v : Vector.t A n)
+: (A + {n = 0}) * Vector.t A k * Vector.t A (n - k).
+Proof.
+  revert k H v.
+  apply (Fix lt_wf) with (x := n); clear n.
+  exact (@vector_quick_select_helper A le le_dec).
+Defined.
+
+Inductive vector_split_correct_order A : forall x y z, Vector.t A x -> Vector.t A y -> Vector.t A z -> Type :=
+| split_nil : vector_split_correct_order (Vector.nil _) (Vector.nil _) (Vector.nil _)
 | split_left : forall x y z v1 v2 v3,
-                 @vector_split_correct A x y z v1 v2 v3
+                 @vector_split_correct_order A x y z v1 v2 v3
                  -> forall k,
-                      vector_split_correct (Vector.cons _ k _ v1) v2 (Vector.cons _ k _ v3)
+                      vector_split_correct_order (Vector.cons _ k _ v1) v2 (Vector.cons _ k _ v3)
 | split_right : forall x y z v1 v2 v3,
-                  @vector_split_correct A x y z v1 v2 v3
+                  @vector_split_correct_order A x y z v1 v2 v3
                   -> forall k,
-                       vector_split_correct v1 (Vector.cons _ k _ v2) (Vector.cons _ k _ v3).
+                       vector_split_correct_order v1 (Vector.cons _ k _ v2) (Vector.cons _ k _ v3).
 
 Notation "[]" := (Vector.nil _) : vector_scope.
 Notation "h :: t" := (Vector.cons _ h _ t) (at level 60, right associativity) : vector_scope.
 Bind Scope vector_scope with Vector.t.
 Delimit Scope vector_scope with vector.
 
+Hint Constructors vector_split_correct_order.
+
 Definition test_qselect := Eval lazy in (fun n => @vector_quick_select nat le le_dec (div2 (S n)) (S n) (lt_div2 _ (lt_0_Sn _))) _ (1::2::3::4::5::[])%vector.
 Check eq_refl : test_qselect = (inleft 3, 1::2::[], 3::4::5::[])%vector.
+
+Lemma vector_split_correct_order_refl1 A x v
+: @vector_split_correct_order A _ x _ (Vector.nil _) v v.
+Proof.
+  induction v; eauto.
+Qed.
+
+Lemma vector_split_correct_order_refl2 A x v
+: @vector_split_correct_order A x _ _ v (Vector.nil _) v.
+Proof.
+  induction v; eauto.
+Qed.
+
+Hint Resolve vector_split_correct_order_refl1 vector_split_correct_order_refl2.
 
 Lemma quick_select_correct A (le : A -> A -> Prop)
       (le_dec : forall x y, {le x y} + {~le x y})
@@ -726,11 +851,99 @@ Lemma quick_select_correct A (le : A -> A -> Prop)
       (H : k < n)
       (v : Vector.t A n)
       (res := @vector_quick_select A le le_dec k n H v)
-: vector_split_correct (snd (fst res)) (snd res) v.
+: vector_split_correct_order (snd (fst res)) (snd res) v.
 Proof.
   unfold vector_quick_select in res.
   subst res.
+  revert k H.
+  induction v; eauto.
+  { simpl.
+    induction k; intros; simpl in *.
+    { erewrite Fix_eq; destruct v; simpl in *; eauto;
+      clear;
+      repeat (intro || apply functional_extensionality_dep);
+      unfold vector_quick_select_helper;
+      destruct_in_match_if atomic; rewrite_hyp; simpl; trivial;
+      destruct_in_match_if ltac:(fun _ => idtac);
+      simpl; subst; trivial. }
+    { erewrite Fix_eq; destruct v; simpl in *; eauto.
+      do 2 destruct_in_match_if' ltac:(fun _ => idtac);
+      simpl;
+      eauto.
+      destruct (le_dec h a).
+      simpl.
+      admit.
+      admit.
+      admit.
+      intros.
+      pose proof (functional_extensionality_dep _ _ (fun y => functional_extensionality_dep _ _ (H0 y))); simpl in *.
+      subst;
+        reflexivity.
+
+Goal forall A B C (f g : forall (x : A) (y : B x), C x y), (forall x y, f x y = g x y) -> True.
+Proof.
+  intros A B C f g H.
+  apply functional_extensionality_dep in H.
+    admit. }
+      constructor.
+
+      do 6 destruct_in_match_if'  ltac:(fun _ => idtac);
+        simpl.
+      erewrite Fix_eq
+      clear;
+      repeat (intro || apply functional_extensionality_dep).
+      unfold vector_quick_select_helper.
+      destruct_in_match_if atomic; rewrite_hyp; simpl; trivial;
+      destruct_in_match_if ltac:(fun _ => idtac);
+      simpl; subst; trivial.
+
+      repeat match goal with
+               | _ => progress rewrite_hyp; simpl; trivial
+               | [ |- appcontext[match ?E with _ => _ end] ] => destruct E; simpl in *
+             end;
+        simpl in *; subst; trivial.
+      simpl.
+      subst.
+      simpl.
+      trivial.
+      trivial.
+      unfold eq_rect_r.
+      unfold eq_rect.
+      simpl.
+      trivial.
+
+    }
+    { simpl;
+      repeat match goal with
+               | [ |- appcontext[match ?E with _ => _ end] ] => destruct E; simpl in *
+             end;
+      simpl in *;
+      eauto.
+      simpl.
+      unfold vector_transport_minus.
+      eauto.
+ }
+      {
+
+
+  destruct (fst
+                (fst
+                   (Fix lt_wf
+                      (λ n0 : nat,
+                       ∀ k : nat,
+                       k < n0
+                       → Vector.t A n0
+                         → (A + {n0 = 0}) * Vector.t A k *
+                           Vector.t A (n0 - k))
+                      (vector_quick_select_helper le le_dec)
+                      (S n) 0 (lt_0_Sn n) (h0 :: v)%vector))).
+  constructor.
+  constructor.
+  s
+  { intros; eauto.
+    SearchAbout (_ < 0).
   erewrite Fix_eq.
+  unfold vector_quick_select_helper.
   revert k H.
 
 
