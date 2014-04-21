@@ -866,86 +866,13 @@ Proof.
       destruct_in_match_if atomic; rewrite_hyp; simpl; trivial;
       destruct_in_match_if ltac:(fun _ => idtac);
       simpl; subst; trivial. }
-    { erewrite Fix_eq; destruct v; simpl in *; eauto.
-      do 2 destruct_in_match_if' ltac:(fun _ => idtac);
+    { erewrite Fix_eq; destruct v; simpl in *; eauto;
+      try do 2 destruct_in_match_if' ltac:(fun _ => idtac);
       simpl;
-      eauto.
-      destruct (le_dec h a).
-      simpl.
-      admit.
-      admit.
-      admit.
-      intros.
-      pose proof (functional_extensionality_dep _ _ (fun y => functional_extensionality_dep _ _ (H0 y))); simpl in *.
-      subst;
-        reflexivity.
-
-Goal forall A B C (f g : forall (x : A) (y : B x), C x y), (forall x y, f x y = g x y) -> True.
-Proof.
-  intros A B C f g H.
-  apply functional_extensionality_dep in H.
-    admit. }
-      constructor.
-
-      do 6 destruct_in_match_if'  ltac:(fun _ => idtac);
-        simpl.
-      erewrite Fix_eq
-      clear;
-      repeat (intro || apply functional_extensionality_dep).
-      unfold vector_quick_select_helper.
-      destruct_in_match_if atomic; rewrite_hyp; simpl; trivial;
-      destruct_in_match_if ltac:(fun _ => idtac);
-      simpl; subst; trivial.
-
-      repeat match goal with
-               | _ => progress rewrite_hyp; simpl; trivial
-               | [ |- appcontext[match ?E with _ => _ end] ] => destruct E; simpl in *
-             end;
-        simpl in *; subst; trivial.
-      simpl.
-      subst.
-      simpl.
-      trivial.
-      trivial.
-      unfold eq_rect_r.
-      unfold eq_rect.
-      simpl.
-      trivial.
-
-    }
-    { simpl;
-      repeat match goal with
-               | [ |- appcontext[match ?E with _ => _ end] ] => destruct E; simpl in *
-             end;
-      simpl in *;
-      eauto.
-      simpl.
-      unfold vector_transport_minus.
-      eauto.
- }
-      {
-
-
-  destruct (fst
-                (fst
-                   (Fix lt_wf
-                      (λ n0 : nat,
-                       ∀ k : nat,
-                       k < n0
-                       → Vector.t A n0
-                         → (A + {n0 = 0}) * Vector.t A k *
-                           Vector.t A (n0 - k))
-                      (vector_quick_select_helper le le_dec)
-                      (S n) 0 (lt_0_Sn n) (h0 :: v)%vector))).
-  constructor.
-  constructor.
-  s
-  { intros; eauto.
-    SearchAbout (_ < 0).
-  erewrite Fix_eq.
-  unfold vector_quick_select_helper.
-  revert k H.
-
+      eauto;
+      admit. }
+  }
+Qed.
 
 Fixpoint take_while A (f : A -> bool) n (v : Vector.t A n) : { x : nat & Vector.t A x }
   := match v with
