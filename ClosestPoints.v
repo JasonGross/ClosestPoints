@@ -1,5 +1,5 @@
 (** * 1-D Closest Point Algorithm *)
-Require Import List Ascii String Arith NPeano Sorted Program Setoid FMapAVL Wf Wf_nat Program Recdef Div2 Even NArith.
+Require Import List Ascii String Arith NPeano Sorted Program Setoid FMapAVL Wf Wf_nat Program Recdef Div2 Even NArith Classes.Morphisms.
 Require Import Utf8.
 
 Set Implicit Arguments.
@@ -149,6 +149,14 @@ Tactic Notation "unique" "pose" constr(defn) :=
     | _ => pose defn
   end.
 
+(** try to specialize all hypotheses with all other hypotheses.  This
+    includes [specialize (H x)] where [H x] requires a coercion from
+    the type of [H] to Funclass. *)
+Ltac specialize_all_ways :=
+  repeat match goal with
+           | [ x : ?T, H : _ |- _ ] => unique pose proof (H x)
+         end.
+
 Hint Extern 0 => match goal with H : False |- _ => destruct H end.
 Hint Extern 0 => match goal with H : None = Some _ |- _ => inversion H end.
 Hint Extern 0 => match goal with H : Some _ = None |- _ => inversion H end.
@@ -162,6 +170,7 @@ Hint Extern 0 => match goal with H : Forall _ (_ :: _) |- _ => inversion_clear H
 Hint Extern 0 => match goal with H : ?x <> ?x |- _ => destruct (H eq_refl) end.
 Hint Extern 0 => match goal with H : lt _ 0 |- _ => destruct (@lt_n_0 _ H) end.
 Hint Extern 0 => match goal with |- appcontext[match ?E with end] => destruct E end.
+Hint Resolve nil_cons.
 
 Lemma eq_list_nil_dec {T} (l : list T) : {l = []} + {l <> []}.
 Proof.
@@ -173,6 +182,67 @@ Class Total {T} (R : relation T) := totality : forall x y, R x y \/ R y x.
 Class Decidable (P : Prop) := decide : {P} + {~P}.
 
 Arguments decide _ {_}.
+
+Infix "∈" := List.In (at level 40, no associativity).
+
+Section dec.
+  Local Hint Extern 0 => apply partial_order_antisym.
+  Local Hint Extern 2 => symmetry.
+
+  Local Ltac t' :=
+    progress repeat (intro
+                       || destruct_sig
+                       || destruct_head_hnf @sumbool
+                       || destruct_head_hnf @or
+                       || destruct_head_hnf @and
+                       || destruct_head_hnf @ex
+                       || subst
+                       || intro
+                       || eauto).
+
+ Local Ltac t :=
+    first [ abstract t'
+          | left; abstract t'
+          | right; abstract t'
+          | t'; try t ].
+
+  Local Obligation Tactic := try solve [ t ].
+
+  Global Instance in_decidable {A} `{H : forall x y : A, Decidable (x = y)}
+         a (l : list A)
+  : Decidable (a ∈ l)
+    := in_dec H a l.
+
+  Global Program Instance and_decidable `{Decidable A, Decidable B}
+  : Decidable (A /\ B).
+  Global Program Instance or_decidable `{Decidable A, Decidable B}
+  : Decidable (A \/ B).
+  Global Program Instance not_decidable `{Decidable A} : Decidable (~A).
+  Global Program Instance ex_in_list_decidable {A P}
+         (ls : list A)
+         `{forall (a : A) ls, Decidable (a ∈ ls)}
+         `{forall a : A, Decidable (P a)}
+  : Decidable (exists a, a ∈ ls /\ P a).
+  Next Obligation.
+    induction ls; t.
+    specialize_all_ways; t.
+  Defined.
+
+  Local Obligation Tactic :=
+    try abstract (t; do 2 apply_hyp'; eauto).
+
+  Global Program Instance eqv_partial_order_decidable
+         `{@PartialOrder A eqA eqvA R preo}
+         x y
+         `{Proper _ (eqA ==> eqA ==> impl)%signature R}
+         `{H0 : Decidable (R x y), H1 : Decidable (R y x)}
+  : Decidable (eqA x y)
+    := match H0, H1 with
+         | left _, left _ => left _
+         | right _, _ => right _
+         | _, right _ => right _
+       end.
+End dec.
 
 Instance le_total : Total le.
 Proof.
@@ -190,8 +260,6 @@ Proof.
 Qed.
 
 Hint Extern 2 => match goal with H : ~?R ?x ?y |- _ => unique pose proof (@total_decidable_neg_flip _ R _ _ x y H); try clear H end.
-
-Infix "∈" := List.In (at level 40, no associativity).
 
 (** ** Motivation *)
 (** "When doing formal program verification, take the simplest
@@ -355,11 +423,15 @@ Module Type Point.
   Context `{x_le_dec : forall x y, Decidable (x_le x y),
               dist_le_dec : forall x y, Decidable (dist_le x y)}.
 
+  Axiom point_in_strip_close_enough : t -> distT -> t -> bool.
+
+  Axiom min_dist : distT -> distT -> distT.
+
   Context `{x_le_preo : PreOrder _ x_le, dist_le_preo : PreOrder _ dist_le}.
-  (*Context `{x_le_paro : @PartialOrder _ eq _ x_le _, dist_le_paro : @PartialOrder _ eq _ dist_le _}.*)
+  Context `{x_le_paro : @PartialOrder _ eq _ x_le _, dist_le_paro : @PartialOrder _ eq _ dist_le _}.
   Context `{x_le_total : Total _ x_le, dist_le_total : Total _ dist_le}.
 
-  Module Notations.
+  Module Import Notations.
     Delimit Scope dist_scope with dist.
     Delimit Scope dec_dist_scope with dec_dist.
 
@@ -372,6 +444,8 @@ Module Type Point.
     Infix "≤" := x_le_dec : dec_scope.
     Infix "≤" := dist_le : dist_scope.
     Infix "≤" := dist_le_dec : dec_dist_scope.
+
+    Notation "∥' x -- y '∥" := (get_dist x y).
   End Notations.
 End Point.
 
@@ -434,8 +508,38 @@ Section spec_get_func.
   Qed.
 End spec_get_func.
 
+Module Type Strip (point : Point).
+  Import point.Notations.
+
+  Axiom get_closest_points_in_strip
+  : forall (median : point.t)
+           (pre_closest_pair : point.t * point.t)
+           (strip : list point.t),
+      point.t * point.t.
+
+  Section correct.
+    Context (median : point.t)
+            (pre_closest_pair : point.t * point.t)
+            (strip : list point.t).
+
+    Let post_closest_pair := get_closest_points_in_strip median pre_closest_pair strip.
+
+    Axiom get_closest_points_in_strip_closer
+    : (∥' fst post_closest_pair -- snd post_closest_pair '∥
+        ≤ ∥' fst pre_closest_pair -- snd pre_closest_pair '∥)%dist.
+
+    (*Axiom get_closest_points_in_strip_closest
+    : List.(∥' fst post_closest_pair -- snd post_closest_pair '∥
+        ≤ ∥' fst pre_closest_pair -- snd pre_closest_pair '∥)%dist.
+
+    Axiom get_closest_points_in_strip_in_strip
+    : (∥' fst post_closest_pair -- snd post_closest_pair '∥
+        ≤ ∥' fst pre_closest_pair -- snd pre_closest_pair '∥)%dist.*)
+  End correct.
+End Strip.
+
 (** We can find the minimum or maximum of a list of points. *)
-Module MidStrip1D (point : Point).
+Module MidStrip1D (point : Point) <: Strip point.
   Import point.Notations.
 
   Definition get_left_most
@@ -453,6 +557,53 @@ Module MidStrip1D (point : Point).
   : point.t * point.t
     := (get_right_most H_left, get_left_most H_right).
 
+  Local Ltac do_induct ls :=
+    induction ls; simpl in *; intros; eauto;
+    case_eq_if; intros; eauto;
+    destruct_head or; repeat subst; eauto.
+
+  (** We can also do it by filtering a single strip *)
+  Program Definition right_most_left_most_from_median (ls : list point.t)
+             (median : point.t)
+             (H_left : exists pt, pt ∈ ls /\ pt ≤ median)
+             (H_right : exists pt, pt ∈ ls /\ ~pt ≤ median)
+  : point.t * point.t
+    := @right_most_left_most
+         (filter (fun pt => if (pt ≤ median)%dec then true else false) ls)
+         (filter (fun pt => if (pt ≤ median)%dec then false else true) ls)
+         _
+         _.
+  Next Obligation.
+    match goal with
+      | [ H : point.x_le ?x _ |- _ ] => generalize dependent x; clear
+    end.
+    do_induct ls.
+  Qed.
+  Next Obligation.
+    match goal with
+      | [ H : not (point.x_le ?x _) |- _ ] => generalize dependent x; clear
+    end.
+    do_induct ls.
+  Qed.
+
+  Definition get_closest_points_in_strip
+          (median : point.t)
+          (pre_closest_pair : point.t * point.t)
+          (strip : list point.t)
+  : point.t * point.t
+    := let _ := point.x_le_preo in
+       let _ := point.x_le_paro in
+       let _ := point.x_le_dec in
+       match (_ : Decidable (exists pt, pt ∈ strip /\ pt ≤ median)),
+             (_ : Decidable (exists pt, pt ∈ strip /\ ~pt ≤ median)) with
+         | left pf1, left pf2
+           => let closest_in_strip := @right_most_left_most_from_median strip median pf1 pf2
+              in if (∥' fst closest_in_strip -- snd closest_in_strip '∥
+                      ≤ ∥' fst pre_closest_pair -- snd pre_closest_pair '∥)%dec_dist
+                 then closest_in_strip
+                 else pre_closest_pair
+         | _, _ => pre_closest_pair
+       end.
   (*Lemma right_most_left_most_correct
         (ls_left ls_right : list point.t)
         (H_left : ls_left <> []) (H_right : ls_right <> [])
@@ -461,6 +612,19 @@ Module MidStrip1D (point : Point).
         (right_correct : List.Forall (fun pt => median ≤ pt) ls_right)
         (no_dup_median : (median ∈ ls_left /\ ¬ median ∈ ls_right) \/ (¬ median ∈ ls_right))
         (triangle :*)
+  Section correct.
+    Context (median : point.t)
+            (pre_closest_pair : point.t * point.t)
+            (strip : list point.t).
+
+    Let post_closest_pair := get_closest_points_in_strip median pre_closest_pair strip.
+
+    Theorem get_closest_points_in_strip_closer
+    : (∥' fst post_closest_pair -- snd post_closest_pair '∥
+        ≤ ∥' fst pre_closest_pair -- snd pre_closest_pair '∥)%dist.
+    Proof.
+    Admitted.
+  End correct.
 End MidStrip1D.
 
 Module Type PointSet (point : Point).
@@ -627,9 +791,23 @@ Module ClosestPoints (point : Point) (point_set : PointSet point).
     apply (Fix lt_wf) with (x := n); clear n.
     exact make_algorithm_tree_from_point_set__helper.
   Defined.
+
+  Definition walk_algorithm_tree_in_order
+             (tr : tree ({ x : _ & point_set.t x } *
+                         { x : _ & point_set.t x } *
+                         point_set.split_marker *
+                         (point.distT -> list (point.t * { x : _ & point_set.t x })))
+                        point.distT)
+             (handle_node : list (point.t * { x : _ & point_set.t x }) -> point.distT)
+  : list ({ x : _ & point_set.t x } *
+                         { x : _ & point_set.t x } *
+                         point_set.split_marker *
+                         (point.distT -> list (point.t * { x : _ & point_set.t x })))
+                        point.distTpoint.distT * point_set.split_marker * list (point.t * { x : _ & point_set.t x }) ).
+    Print tree.
 End ClosestPoints.
 
-Module NatPoint : Point.
+Module NatPoint <: Point.
   Definition t := nat.
   Definition distT := nat.
   Definition min_dist := min.
@@ -645,6 +823,13 @@ Module NatPoint : Point.
   Instance dist_le_total : Total dist_le := _.
   Module Notations.
   End Notations.
+
+  (** We take in the median point, the smallest distance we know
+      about, and another point.  We say that a point is in the strip
+      if its distance to the median is less than or equal to the
+      smallest distance we know about. *)
+  Definition point_in_strip_close_enough : t -> distT -> t -> bool
+    := fun pt1 dist pt2 => if (∥' pt1 -- pt2 '∥ ≤ dist)%dec then true else false.
 End NatPoint.
 
 Module Type SplitMarker (point : Point).
@@ -882,7 +1067,7 @@ Fixpoint take_while A (f : A -> bool) n (v : Vector.t A n) : { x : nat & Vector.
                                else existT _ _ (Vector.nil _)
      end.
 
-Module NaivePointSet (point : Point) (splitter : SplitMarker point) : PointSet point.
+Module NaivePointSet (point : Point) (splitter : SplitMarker point) <: PointSet point.
   Definition t := Vector.t point.t.
   Definition split_marker := splitter.t.
 
@@ -1029,7 +1214,59 @@ Module NatPrinter.
   Abort.
 End NatPrinter.
 
+Module ImageSplitMarker <: SplitMarker NatPoint.
+  Module point := NatPoint.
+  (** An image has a list of points in the grid, and a list of line locations. *)
+  Definition t := (list point.t * list point.t)%type.
+  Definition make_split_marker
+             (left : list point.t)
+             (median : option point.t)
+             (right : list point.t)
+  : t
+    := ((left ++ right)%list,
+        match median with
+          | Some pt => [pt]
+          | _ => nil
+        end).
+End ImageSplitMarker.
 
+Module PointSet1D := NaivePointSet NatPoint ImageSplitMarker.
+Module ClosestPoints1D := ClosestPoints NatPoint PointSet1D.
+
+Goal True.
+  pose (@ClosestPoints1D.make_algorithm_tree_from_point_set
+          _ (1::5::2::15::13::[])%vector).
+  hnf in s.
+  lazy [NatPoint.t
+          NatPoint.point_in_strip_close_enough
+          ImageSplitMarker.make_split_marker
+          Vector.to_list
+          PointSet1D.t
+          NatPoint.get_dist
+          NatPoint.distT
+          abs_minus
+          le_dec
+          le_gt_dec
+          le_lt_dec
+          nat_rect
+          nat_rec
+          nat_ind
+          PointSet1D.split_marker
+          sumbool_rec
+          sumbool_rect
+          sumbool_ind
+          ImageSplitMarker.t
+          minus
+          div2
+          List.app
+          NatPoint.x_le
+          NatPoint.x_le_dec] in s.
+  Set Printing All.
+
+  simpl in s.
+  lazy in s.
+
+Print ClosestPoints1D.
 
 Definition point := prod nat nat.
 Bind Scope point_scope with point.
@@ -1520,7 +1757,7 @@ Fixpoint take_while A (f : A -> bool) n (v : Vector.t A n) : { x : nat & Vector.
                                else existT _ _ (Vector.nil _)
      end.
 
-Module NaivePointSet (point : Point) (splitter : SplitMarker point) : PointSet point.
+Module NaivePointSet (point : Point) (splitter : SplitMarker point) <: PointSet point.
   Definition t := Vector.t point.t.
   Definition split_marker := splitter.t.
 
