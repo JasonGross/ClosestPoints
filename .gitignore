@@ -1,1 +1,7 @@
 *~
+Makefile.coq
+Makefile.coq.bak
+*.vo
+*.glob
+*.v.d
+*#*#

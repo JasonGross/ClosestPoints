@@ -1,0 +1,3 @@
+[submodule "Tactics"]
+	path = Tactics
+	url = https://github.com/JasonGross/coq-tactics.git
