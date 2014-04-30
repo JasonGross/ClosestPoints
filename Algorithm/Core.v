@@ -1,6 +1,7 @@
 Require Export Div2 Even NArith NPeano.
 Require Export Point.Core PointSet.Core.
 Require Export Tree.
+Require Export State.Core.
 
 Module ClosestPoints (point : Point) (point_set : PointSet point).
   (** At each node of the tree, we store the left point-set, the right point-set, and a function that takes the distance and provides us with a strip of point-lists to inspect.  At each leaf, which represents at most three points, we store the minimum square distance. *)
@@ -12,32 +13,32 @@ Module ClosestPoints (point : Point) (point_set : PointSet point).
   Local Hint Extern 2 => progress subst.
   Local Hint Extern 2 => unfold lt.
 
+  Module Export state := State point point_set.
+
   Definition make_algorithm_tree_from_point_set__helper
   : ∀ x : nat,
       (∀ y : nat,
          y < x
          → point_set.t y
          → tree
-             ({x0 : nat & point_set.t x0} * {x0 : nat & point_set.t x0} *
-              point_set.split_marker *
-              (point.distT → list (point.t * {x0 : nat & point_set.t x0})))
-             point.distT + ({y = 0} + {y = 1}))
+             State
+             (point.t * point.t)
+           + ({y = 0} + {y = 1}))
       → point_set.t x
       → tree
-          ({x0 : nat & point_set.t x0} * {x0 : nat & point_set.t x0} *
-           point_set.split_marker *
-           (point.distT → list (point.t * {x0 : nat & point_set.t x0})))
-          point.distT + ({x = 0} + {x = 1}).
+          State
+          (point.t * point.t)
+        + ({x = 0} + {x = 1}).
   Proof.
     intros n make_algorithm_tree_from_point_set.
     refine (match n as n' return n' = n -> point_set.t n' -> _ + ({n' = 0} + {n' = 1}) with
               | 0 => fun _ _ => inr (left eq_refl)
               | 1 => fun _ _ => inr (right eq_refl)
-              | 2 => fun _ s => inl (Leaf _ (point_set.get_two_points_dist s))
-              | 3 => fun _ s => inl (Leaf _ (point_set.get_three_points_min_dist s))
+              | 2 => fun _ s => inl (Leaf _ (point_set.get_two_points s))
+              | 3 => fun _ s => inl (Leaf _ (point_set.get_two_closest_of_three s))
               | n' => fun H s => let split_pts := point_set.split s in
-                                 let marker := fst (fst split_pts) in
-                                 let left_set := snd (fst split_pts) in
+                                 (*let marker := fst (fst split_pts) in*)
+                                 let left_set := (*snd*) (fst split_pts) in
                                  let right_set := snd split_pts in
                                  let left_tree := make_algorithm_tree_from_point_set _ _ left_set in
                                  let right_tree := make_algorithm_tree_from_point_set _ _ right_set in
@@ -47,10 +48,9 @@ Module ClosestPoints (point : Point) (point_set : PointSet point).
                                            | inr (left eq0) => match Nat.neq_succ_0 _ eq0 with end
                                            | inr (right eq1) => match Nat.neq_succ_0 _ (Nat.succ_inj _ _ eq1) with end
                                          end)
-                                        (existT _ _ left_set,
-                                         existT _ _ right_set,
-                                         marker,
-                                         (point_set.points_sets_in_strip s))
+                                        {| left_points := existT _ _ left_set;
+                                           right_points := existT _ _ right_set |}
+                                        (*(point_set.points_sets_in_strip s))*)
                                         (match right_tree with
                                            | inl t => Some t
                                            | inr _ => None
@@ -66,6 +66,7 @@ Module ClosestPoints (point : Point) (point_set : PointSet point).
       apply le_n_S.
       eapply le_minus.
     * auto.
+    *
   Defined.
 
   Definition make_algorithm_tree_from_point_set

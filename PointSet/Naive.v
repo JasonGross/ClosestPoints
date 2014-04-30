@@ -8,10 +8,10 @@ Module NaivePointSet (point : Point) (splitter : SplitMarker point) <: PointSet 
 
   Definition split : forall n,
                        t n
-                       -> split_marker * t (div2 n) * t (n - (div2 n))
+                       -> (*split_marker * *) t (div2 n) * t (n - (div2 n))
     := fun n =>
-         match n as n return t n -> _ * t (div2 n) * t (n - div2 n) with
-           | 0 => fun _ => (splitter.make_split_marker List.nil None List.nil, Vector.nil _, Vector.nil _)
+         match n as n return t n -> (* _ * *) t (div2 n) * t (n - div2 n) with
+           | 0 => fun _ => ((*splitter.make_split_marker List.nil None List.nil,*) Vector.nil _, Vector.nil _)
            | S n' => fun all_points =>
                        let split_pts := @vector_quick_select
                                           _
@@ -26,10 +26,10 @@ Module NaivePointSet (point : Point) (splitter : SplitMarker point) <: PointSet 
                        match median with
                          | inright pf => match Nat.neq_succ_0 _ pf with end
                          | inleft median_v =>
-                           (splitter.make_split_marker
+                           ((*splitter.make_split_marker
                               (Vector.to_list left_tree)
                               (Some median_v)
-                              (Vector.to_list right_tree),
+                              (Vector.to_list right_tree),*)
                             left_tree,
                             right_tree)
                        end
@@ -45,6 +45,38 @@ Module NaivePointSet (point : Point) (splitter : SplitMarker point) <: PointSet 
              ::points_sets_in_strip xs max_dist
        end.
 
+  Local Open Scope vector_scope.
+  Program Definition get_two_points : t 2 -> point.t * point.t
+    := fun v
+       => match v in Vector.t _ n return n = 2 -> _ with
+            | [] => fun H => !
+            | x::v'
+              => (match v' in Vector.t _ n return S n = 2 -> _ with
+                    | [] => fun H => !
+                    | y::v''
+                      => (match v'' in Vector.t _ n return S (S n) = 2 -> _ with
+                            | [] => fun _ => (x, y)
+                            | _::_ => fun H => !
+                          end)
+                  end)
+          end eq_refl.
+
+  Definition min_pair_by_dist : point.t * point.t -> point.t * point.t -> point.t * point.t
+    := @min_by (point.t * point.t)
+               point.distT
+               point.dist_le
+               point.dist_le_dec
+               (fun ab => point.get_dist (fst ab) (snd ab)).
+
+  Definition get_two_closest_of_three : t 3 -> point.t * point.t.
+  Proof.
+    intro v.
+    inversion_clear v as [|x ? v']; rename v' into v.
+    inversion_clear v as [|y ? v']; rename v' into v.
+    inversion_clear v as [|z ? v']; rename v' into v.
+    exact (min_pair_by_dist (min_pair_by_dist (x, y) (y, z))
+                            (x, z)).
+  Defined.
 
   Definition get_two_points_dist : t 2 -> point.distT.
   Proof.

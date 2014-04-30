@@ -8,12 +8,14 @@ Module Type PointSet (point : Point).
 
   Axiom split : forall n,
                   t n
-                  -> split_marker * t (div2 n) * t (n - (div2 n)).
+                  -> (*split_marker * *) t (div2 n) * t (n - (div2 n)).
   Axiom points_sets_in_strip : forall n,
                                  t n
                                  -> point.distT
                                  -> list (point.t * { x : nat & t x }).
 
-  Axiom get_two_points_dist : t 2 -> point.distT.
-  Axiom get_three_points_min_dist : t 3 -> point.distT.
+  Axiom get_two_points : t 2 -> point.t * point.t.
+  (*Axiom get_two_points_dist : t 2 -> point.distT.*)
+  (*Axiom get_three_points_min_dist : t 3 -> point.distT.*)
+  Axiom get_two_closest_of_three : t 3 -> point.t * point.t.
 End PointSet.

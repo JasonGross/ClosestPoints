@@ -105,3 +105,10 @@ Notation "[]" := (Vector.nil _) : vector_scope.
 Notation "h :: t" := (Vector.cons _ h _ t) (at level 60, right associativity) : vector_scope.
 Bind Scope vector_scope with Vector.t.
 Delimit Scope vector_scope with vector.
+
+(** Given a decidable [≤] on [B] and a function [f : A → B], we can
+    take the smaller [A] as decided by [f]. *)
+Definition min_by {A B P} `{p : forall x y : B, Decidable (P x y)}
+           (f : A -> B)
+: A -> A -> A
+  := fun a b => if p (f a) (f b) then a else b.
