@@ -3,7 +3,7 @@ Require Export Point.Core2D Point.NatPoint1D Point.NatPointCore2D CommonDefiniti
 Module NatPoint2D <: Point2D.
   Definition t := point.
   Definition distT := nat.
-  Definition min_dist := min.
+  (*Definition min_dist := min.*)
   Definition get_dist (x y : point) := ∥ x -- y ∥².
   Definition x_le p1 p2 := le p1.(x) p2.(x).
   Definition y_le p1 p2 := le p1.(y) p2.(y).
@@ -28,6 +28,10 @@ Module NatPoint2D <: Point2D.
   Instance x_le_total : Total x_le := _.
   Admitted.
   Instance dist_le_total : Total dist_le := _.
+
+  Definition min_dist (x y : distT) : distT
+    := if dist_le_dec x y then x else y.
+
   Module Notations.
   End Notations.
 End NatPoint2D.

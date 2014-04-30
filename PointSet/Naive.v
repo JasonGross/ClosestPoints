@@ -8,10 +8,10 @@ Module NaivePointSet (point : Point) (splitter : SplitMarker point) <: PointSet 
 
   Definition split : forall n,
                        t n
-                       -> (*split_marker * *) t (div2 n) * t (n - (div2 n))
+                       -> (point.t + {n = 0}) * (*split_marker * *) t (div2 n) * t (n - (div2 n))
     := fun n =>
-         match n as n return t n -> (* _ * *) t (div2 n) * t (n - div2 n) with
-           | 0 => fun _ => ((*splitter.make_split_marker List.nil None List.nil,*) Vector.nil _, Vector.nil _)
+         match n as n return t n -> _ * t (div2 n) * t (n - div2 n) with
+           | 0 => fun _ => (inright eq_refl, (*splitter.make_split_marker List.nil None List.nil,*) Vector.nil _, Vector.nil _)
            | S n' => fun all_points =>
                        let split_pts := @vector_quick_select
                                           _
@@ -26,7 +26,8 @@ Module NaivePointSet (point : Point) (splitter : SplitMarker point) <: PointSet 
                        match median with
                          | inright pf => match Nat.neq_succ_0 _ pf with end
                          | inleft median_v =>
-                           ((*splitter.make_split_marker
+                           (inleft median_v,
+                            (*splitter.make_split_marker
                               (Vector.to_list left_tree)
                               (Some median_v)
                               (Vector.to_list right_tree),*)
@@ -94,4 +95,12 @@ Module NaivePointSet (point : Point) (splitter : SplitMarker point) <: PointSet 
     inversion_clear v as [|z ? v']; rename v' into v.
     exact (point.min_dist (point.min_dist (point.get_dist x y) (point.get_dist y z)) (point.get_dist x z)).
   Defined.
+
+  Import point.Notations.
+  Definition points_in_strip n (pts : t n) (median : point.t) (cur_closest_dist : point.distT)
+  : list point.t
+    := filter (fun pt => if (∥' median -- pt '∥ ≤ cur_closest_dist)%dec_dist
+                         then true
+                         else false)
+              (Vector.to_list pts).
 End NaivePointSet.

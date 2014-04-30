@@ -5,7 +5,7 @@ Require Export Point.Core.
 Module NatPoint1D <: Point.
   Definition t := nat.
   Definition distT := nat.
-  Definition min_dist := min.
+  (*Definition min_dist := min.*)
   Definition get_dist (x y : t) := ∥' x -- y '∥.
   Definition x_le : t -> t -> Prop := le.
   Definition dist_le : distT -> distT -> Prop := le.
@@ -18,6 +18,10 @@ Module NatPoint1D <: Point.
   Instance dist_le_paro : @PartialOrder _ eq _ dist_le dist_le_preo := _.
   Instance x_le_total : Total x_le := _.
   Instance dist_le_total : Total dist_le := _.
+
+  Definition min_dist (x y : distT) : distT
+    := if dist_le_dec x y then x else y.
+
   Module Notations.
   End Notations.
 

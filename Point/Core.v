@@ -13,7 +13,8 @@ Module Type Point.
 
   Axiom point_in_strip_close_enough : t -> distT -> t -> bool.
 
-  Axiom min_dist : distT -> distT -> distT.
+  Definition min_dist (x y : distT) : distT
+    := if dist_le_dec x y then x else y.
 
   Context `{x_le_preo : PreOrder _ x_le, dist_le_preo : PreOrder _ dist_le}.
   Context `{x_le_paro : @PartialOrder _ eq _ x_le _, dist_le_paro : @PartialOrder _ eq _ dist_le _}.
