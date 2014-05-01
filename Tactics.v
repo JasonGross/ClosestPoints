@@ -38,7 +38,7 @@ Section dec.
   Local Hint Extern 0 => apply partial_order_antisym.
   Local Hint Extern 2 => symmetry.
 
-  Local Ltac t' :=
+  Local Ltac t :=
     progress repeat (intro
                        || destruct_sig
                        || destruct_head_hnf @sumbool
@@ -47,35 +47,59 @@ Section dec.
                        || destruct_head_hnf @ex
                        || subst
                        || intro
-                       || eauto).
+                       || eauto
+                       || split
+                       || left
+                       || right).
 
- Local Ltac t :=
-    first [ abstract t'
-          | left; abstract t'
-          | right; abstract t'
-          | t'; try t ].
 
-  Local Obligation Tactic := try solve [ t ].
+  Local Obligation Tactic := try abstract t.
 
   Global Instance in_decidable {A} `{H : forall x y : A, Decidable (x = y)}
          a (l : list A)
   : Decidable (a ∈ l)
     := in_dec H a l.
 
-  Global Program Instance and_decidable `{Decidable A, Decidable B}
-  : Decidable (A /\ B).
-  Global Program Instance or_decidable `{Decidable A, Decidable B}
-  : Decidable (A \/ B).
-  Global Program Instance not_decidable `{Decidable A} : Decidable (~A).
-  Global Program Instance ex_in_list_decidable {A P}
+  Global Program Instance and_decidable `{a : Decidable A, b : Decidable B}
+  : Decidable (A /\ B)
+    := match a, b with
+         | left a', left b' => left (conj a' b')
+         | right a', _ => right _
+         | _, right b' => right _
+       end.
+  Global Program Instance or_decidable `{a : Decidable A, b : Decidable B}
+  : Decidable (A \/ B)
+    := match a, b with
+         | left a', _ => left (or_introl a')
+         | _, left b' => left (or_intror b')
+         | right a', right b' => right _
+       end.
+  Global Program Instance not_decidable `{a : Decidable A} : Decidable (~A)
+    := match a with
+         | left a' => right _
+         | right a' => left _
+       end.
+  Fixpoint ex_in_list_decidable {A P}
+         `{in_dec : forall (a : A) ls, Decidable (a ∈ ls)}
+         `{P_dec : forall a : A, Decidable (P a)}
          (ls : list A)
-         `{forall (a : A) ls, Decidable (a ∈ ls)}
-         `{forall a : A, Decidable (P a)}
   : Decidable (exists a, a ∈ ls /\ P a).
-  Next Obligation.
-    induction ls; t.
-    specialize_all_ways; t.
+  Proof.
+    refine match ls as ls return {exists a, a ∈ ls /\ P a} + {~exists a, a ∈ ls /\ P a} with
+             | nil => right _
+             | x::xs => match P_dec x with
+                          | left Px => left (ex_intro _ x _)
+                          | right H0 => match @ex_in_list_decidable A P in_dec P_dec xs with
+                                          | left exa => left (match exa with
+                                                                | ex_intro x Hx => ex_intro _ x _
+                                                              end)
+                                          | right H1 => right _
+                                        end
+                        end
+           end;
+    clear ex_in_list_decidable P_dec in_dec ls; abstract t.
   Defined.
+  Global Existing Instance ex_in_list_decidable.
 
   Local Obligation Tactic :=
     try abstract (t; do 2 apply_hyp'; eauto).
