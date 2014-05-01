@@ -4,12 +4,15 @@ Tactics.v
 CommonDefinitions.v
 Algorithm/BruteForce.v
 Algorithm/Core.v
+Algorithm/CoreProofs.v
 Algorithm/Full1D.v
 Point/Core.v
 Point/NatPoint1D.v
 CenterStrip/Core.v
+CenterStrip/CoreProofs.v
 CenterStrip/Strip1D.v
 PointSet/Core.v
+PointSet/CoreProofs.v
 PointSet/Naive.v
 PointSet/PointSet1D.v
 Tree.v

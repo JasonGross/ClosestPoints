@@ -6,6 +6,11 @@ Module NaivePointSet (point : Point) (splitter : SplitMarker point) <: PointSet 
   Definition t := Vector.t point.t.
   Definition split_marker := splitter.t.
 
+  Definition Forall : forall (P : point.t -> Prop) n, t n -> Prop
+    := @Vector.Forall point.t.
+  Definition In : forall (x : point.t) n, t n -> Prop
+    := @Vector.In point.t.
+
   Definition split : forall n,
                        t n
                        -> (point.t + {n = 0}) * (*split_marker * *) t (div2 n) * t (n - (div2 n))

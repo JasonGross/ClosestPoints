@@ -1,5 +1,5 @@
 Require Export Div2 Even NArith NPeano.
-Require Import Omega.
+Require Export Omega.
 Require Export Point.Core PointSet.Core.
 Require Export Tree.
 Require Export State.Core.

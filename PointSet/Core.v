@@ -20,6 +20,9 @@ Module Type PointSet (point : Point).
                                       (cur_min_dist : point.distT),
                                  list point.t.
 
+  Axiom Forall : forall (P : point.t -> Prop) n, t n -> Prop.
+  Axiom In : forall (x : point.t) n, t n -> Prop.
+
   Axiom get_two_points : t 2 -> point.t * point.t.
   (*Axiom get_two_points_dist : t 2 -> point.distT.*)
   (*Axiom get_three_points_min_dist : t 3 -> point.distT.*)
