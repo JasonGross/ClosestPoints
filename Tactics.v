@@ -22,6 +22,7 @@ Hint Extern 0 => match goal with |- appcontext[match ?E with end] => case E end.
 Hint Resolve nil_cons.
 Hint Extern 0 => match goal with H : S _ = 0 |- _ => destruct (Nat.neq_succ_0 _ H) end.
 Hint Extern 0 => match goal with H : 0 = S _ |- _ => destruct (Nat.neq_0_succ _ H) end.
+Hint Extern 0 => match goal with H : ?x < ?x |- _ => destruct (@lt_irrefl _ H) end.
 
 Lemma eq_list_nil_dec {T} (l : list T) : {l = []} + {l <> []}.
 Proof.
