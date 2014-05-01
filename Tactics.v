@@ -1,4 +1,4 @@
-Require Export List Arith Utf8 Program Setoid Classes.Morphisms.
+Require Export List Arith Utf8 Program Setoid Classes.Morphisms NPeano.
 Require Export Tactics.Common.
 
 Global Set Implicit Arguments.
@@ -18,8 +18,10 @@ Hint Extern 0 => solve [ reflexivity ].
 Hint Extern 0 => match goal with H : Forall _ (_ :: _) |- _ => inversion_clear H end.
 Hint Extern 0 => match goal with H : ?x <> ?x |- _ => destruct (H eq_refl) end.
 Hint Extern 0 => match goal with H : lt _ 0 |- _ => destruct (@lt_n_0 _ H) end.
-Hint Extern 0 => match goal with |- appcontext[match ?E with end] => destruct E end.
+Hint Extern 0 => match goal with |- appcontext[match ?E with end] => case E end.
 Hint Resolve nil_cons.
+Hint Extern 0 => match goal with H : S _ = 0 |- _ => destruct (Nat.neq_succ_0 _ H) end.
+Hint Extern 0 => match goal with H : 0 = S _ |- _ => destruct (Nat.neq_0_succ _ H) end.
 
 Lemma eq_list_nil_dec {T} (l : list T) : {l = []} + {l <> []}.
 Proof.

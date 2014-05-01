@@ -49,31 +49,37 @@ Module NatPrinter.
              (points : list nat) : string :=
     row_to_string lines point_disp (list_to_row points nil).
 
-  Ltac print t := let t' := (eval compute in t) in idtac t'.
+  Definition string_list_of_nats_with_lines l lines :=
+    (string_list_of_nats (fun x =>
+                            match lines with
+                              | nil => " "
+                              | x0::xs => if eq_nat_dec x0 x then "|"
+                                          else if in_dec eq_nat_dec x lines then ":"(*"⋮"*)
+                                               else " "
+                            end)
+                         (fun _ => "*")
+                         l).
+
+  Definition string_list_of_nats_with_lines_and_points l lines oh_points bold_points :=
+    string_list_of_nats (fun x =>
+                           match lines with
+                             | nil => " "
+                             | x0::xs => if eq_nat_dec x0 x then "|"
+                                         else if in_dec eq_nat_dec x lines then ":"(*"⋮"*)
+                                              else " "
+                           end)
+                        (fun x =>
+                           if in_dec eq_nat_dec x oh_points then "o"
+                           else if in_dec eq_nat_dec x bold_points then "●"
+                                else "*")
+                        l.
+
+  Ltac print t := let t' := (eval lazy in t) in idtac t'.
   Ltac print_list l := print (string_list_of_nats (fun _ => "") (fun _ => "*") l).
   Ltac print_list_with_lines l lines :=
-    print (string_list_of_nats (fun x =>
-                                  match lines with
-                                    | nil => " "
-                                    | x0::xs => if eq_nat_dec x0 x then "|"
-                                                else if in_dec eq_nat_dec x lines then ":"(*"⋮"*)
-                                                     else " "
-                                  end)
-                               (fun _ => "*")
-                               l).
+    print (string_list_of_nats_with_lines l lines).
   Ltac print_list_with_lines_and_points l lines oh_points bold_points :=
-    print (string_list_of_nats (fun x =>
-                                  match lines with
-                                    | nil => " "
-                                    | x0::xs => if eq_nat_dec x0 x then "|"
-                                                else if in_dec eq_nat_dec x lines then ":"(*"⋮"*)
-                                                     else " "
-                                  end)
-                               (fun x =>
-                                  if in_dec eq_nat_dec x oh_points then "o"
-                                  else if in_dec eq_nat_dec x bold_points then "●"
-                                       else "*")
-                               l).
+    print (string_list_of_nats_with_lines_and_points l lines oh_points bold_points).
   Goal True.
     print_list (1::5::7::15::nil).
     print_list (1::5::7::30::nil).

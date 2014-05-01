@@ -42,6 +42,7 @@ Require Import PointSet.Naive.
 
 (** ** The display mechanism *)
 Require Import Printers.Nat.
+Import NatPrinter.
 
 (** ** The full algorithm *)
 Require Import Algorithm.Full1D.
@@ -53,25 +54,36 @@ Definition focus {T} (_ : T) := True.
 Definition focusI {T} {x : T} : focus x := I.
 Opaque focus.
 
+Record LeafInfo :=
+  { current_points : list NatPoint1D.t;
+    closest_points : NatPoint1D.t * NatPoint1D.t }.
+(*
+Record ImageInfo :=
+  { all_points : list ClosestPoints1D.point.t;
+    current_points : list ClosestPoints1D.point.t;
+ *)
+
 Goal True.
   Print ClosestPoints1D.
+  pose (1::5::2::15::13::[])%list as points.
   pose (match @ClosestPoints1D.make_algorithm_tree_from_point_set
-                _ (1::5::2::15::13::[])%vector with
+                _ (Vector.of_list points) with
           | inl x => x
           | inr (left H) => match ne_S_0 H with end
           | inr (right H) => match ne_SS_1 H with end
         end) as s.
   lazy in s.
+  Eval lazy in string_list_of_nats_with_lines points List.nil.
+  Locate median.
   assert (p : focus
                 (@ClosestPoints1D.walk_algorithm_tree_in_order
                    _ _
-                   (fun pts _ => (tt, pts))
+                   (fun pts _ => (tt, ""(*pts*)))
+                   (fun st _ => (tt, (string_list_of_nats_with_lines points ((ClosestPoints1D.state.median st)::List.nil))::List.nil))
                    (fun _ _ => (tt, List.nil))
-                   (fun _ _ => (tt, List.nil))
-                   (fun st _ => (tt, (ClosestPoints1D.state.closest_points st)::List.nil))
+                   (fun st _ => (tt, (""(*ClosestPoints1D.state.closest_points st*))::List.nil))
                    s
-                   tt)) by exact focusI;
-  subst s;
+                   tt)) by exact focusI.
   lazy in p.
 lazy [not_decidable] in p.
 
