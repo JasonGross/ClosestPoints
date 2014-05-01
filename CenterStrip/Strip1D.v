@@ -28,23 +28,23 @@ Module MidStrip1D (point : Point) <: Strip point.
   (** We can also do it by filtering a single strip *)
   Program Definition right_most_left_most_from_median (ls : list point.t)
              (median : point.t)
-             (H_left : exists pt, pt ∈ ls /\ pt ≤ median)
-             (H_right : exists pt, pt ∈ ls /\ ~pt ≤ median)
+             (H_left : exists pt, pt ∈ ls /\ ~median ≤ pt)
+             (H_right : exists pt, pt ∈ ls /\ median ≤ pt)
   : point.t * point.t
     := @right_most_left_most
-         (filter (fun pt => if (pt ≤ median)%dec then true else false) ls)
-         (filter (fun pt => if (pt ≤ median)%dec then false else true) ls)
+         (filter (fun pt => if (median ≤ pt)%dec then false else true) ls)
+         (filter (fun pt => if (median ≤ pt)%dec then true else false) ls)
          _
          _.
   Next Obligation.
     match goal with
-      | [ H : point.x_le ?x _ |- _ ] => generalize dependent x; clear
+      | [ H : not (point.x_le _ ?x) |- _ ] => generalize dependent x; clear
     end.
     do_induct ls.
   Qed.
   Next Obligation.
     match goal with
-      | [ H : not (point.x_le ?x _) |- _ ] => generalize dependent x; clear
+      | [ H : point.x_le _ ?x |- _ ] => generalize dependent x; clear
     end.
     do_induct ls.
   Qed.
@@ -57,8 +57,8 @@ Module MidStrip1D (point : Point) <: Strip point.
     := let _ := point.x_le_preo in
        let _ := point.x_le_paro in
        let _ := point.x_le_dec in
-       match (_ : Decidable (exists pt, pt ∈ strip /\ pt ≤ median)),
-             (_ : Decidable (exists pt, pt ∈ strip /\ ~pt ≤ median)) with
+       match (_ : Decidable (exists pt, pt ∈ strip /\ ~median ≤ pt)),
+             (_ : Decidable (exists pt, pt ∈ strip /\ median ≤ pt)) with
          | left pf1, left pf2
            => let closest_in_strip := @right_most_left_most_from_median strip median pf1 pf2
               in if (∥' fst closest_in_strip -- snd closest_in_strip '∥

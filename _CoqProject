@@ -18,6 +18,7 @@ SplitMarker/Image1D.v
 VectorQuickSelect.v
 VectorQuickSelectProofs.v
 Printers/Nat.v
+Printers/Helpers.v
 State/Core.v
 
 ClosestPoints.v

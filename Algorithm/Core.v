@@ -146,7 +146,10 @@ Module ClosestPoints (point : Point) (point_set : PointSet point) (strip : Strip
                             right_points := existT _ _ right_set;
                             median := median;
                             center_points := center_strip;
-                            closest_points := closest_points |}
+                            closest_points := closest_points;
+                            closest_left_points := left_pts;
+                            closest_right_points := right_pts;
+                            closest_center_points := closest_points_in_strip |}
                          (*(point_set.points_sets_in_strip s)*)
                          (Some right_tree))
             end eq_refl);

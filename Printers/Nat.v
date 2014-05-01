@@ -1,4 +1,4 @@
-Require Export Ascii String List Arith.
+Require Export Ascii String List Arith Omega Vector List.
 
 Module NatPrinter.
   Local Open Scope string_scope.
