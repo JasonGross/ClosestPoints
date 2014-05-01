@@ -65,7 +65,7 @@ Record ImageInfo :=
 
 Goal True.
   Print ClosestPoints1D.
-  pose (1::5::2::15::13::[])%list as points.
+  pose (1::5::2::15::13::20::12::10::11::[])%list as points.
   pose (match @ClosestPoints1D.make_algorithm_tree_from_point_set
                 _ (Vector.of_list points) with
           | inl x => x
@@ -75,15 +75,68 @@ Goal True.
   lazy in s.
   Eval lazy in string_list_of_nats_with_lines points List.nil.
   Locate median.
+  Print ClosestPoints1D.state.State.
   assert (p : focus
-                (@ClosestPoints1D.walk_algorithm_tree_in_order
-                   _ _
-                   (fun pts _ => (tt, ""(*pts*)))
-                   (fun st _ => (tt, (string_list_of_nats_with_lines points ((ClosestPoints1D.state.median st)::List.nil))::List.nil))
-                   (fun _ _ => (tt, List.nil))
-                   (fun st _ => (tt, (""(*ClosestPoints1D.state.closest_points st*))::List.nil))
-                   s
-                   tt)) by exact focusI.
+                ("                            "::(snd
+                   (@ClosestPoints1D.walk_algorithm_tree_in_order
+                      _ _
+
+                      (** at the leaves, what do we do? *)
+                      (** we display the other points as [.], the current points as [*], and the closest points as [o] *)
+                      (fun pts lines_and_points =>
+                         let disp_points' := ("o", (fst pts)::(snd pts)::[])::(".", points)::(snd lines_and_points) in
+                         ((fst lines_and_points, disp_points'),
+                          string_list_of_nats_with_lines_and_points
+                            points
+                            (fst lines_and_points)
+                            disp_points'))
+
+
+
+                      (** before each split, what do we display? *)
+                      (** We display the new median line as [|], the old one as [:] *)
+                      (fun st lines_and_points => let lines' := (ClosestPoints1D.state.median st)::(fst lines_and_points) in
+                                       ((lines', snd lines_and_points),
+                                        (string_list_of_nats_with_lines_and_points
+                                           points
+                                           lines'
+                                           (snd lines_and_points))::List.nil))
+
+                      (** after we come back from the left side, what do we display? *)
+                      (** We display the points we care about, keeping the [o] points, but removing the [.] points *)
+                      (fun st lines_and_points =>
+                         let star := ("*",
+                                      ((Vector.to_list (projT2 (ClosestPoints1D.state.left_points st)))
+                                         ++ (Vector.to_list (projT2 (ClosestPoints1D.state.right_points st))))%list) in
+                         let disp_points := match snd lines_and_points with
+                                              | ("o", os)::(".", dts)::disp
+                                                => ("o", os)::star::(".", points)::disp
+                                              | ("o", os)::("*", _)::(".", _)::disp
+                                                => ("o", os)::star::(".", points)::disp
+                                              | disp => star::(".", points)::disp
+                                            end in
+                         let stripped_disp_points := match snd lines_and_points with
+                                                       | ("o", os)::(".", dts)::disp
+                                                         => disp
+                                                       | ("o", os)::("*", _)::(".", _)::disp
+                                                         => disp
+                                                       | disp => disp
+                                                     end in
+                         ((fst lines_and_points, stripped_disp_points),
+                          string_list_of_nats_with_lines_and_points
+                            points
+                            (fst lines_and_points)
+                            disp_points::List.nil))
+
+
+                      (** after we come back from the right side, what do we display? *)
+                      (** First we display the points we care about, keeping the [o] points.
+                          Then we display the center strip.
+                          Then we display the center strip with the closest points on it.
+                          Then we display the closest points we know about so far. *)
+                      (fun st lines_and_points => (lines_and_points, (""(*ClosestPoints1D.state.closest_points st*))::List.nil))
+                      s
+                      (List.nil, List.nil))))) by exact focusI;
   lazy in p.
 lazy [not_decidable] in p.
 

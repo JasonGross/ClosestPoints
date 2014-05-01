@@ -60,7 +60,16 @@ Module NatPrinter.
                          (fun _ => "*")
                          l).
 
-  Definition string_list_of_nats_with_lines_and_points l lines oh_points bold_points :=
+  Fixpoint find_symbol_of_point pt symb_points :=
+    match symb_points with
+      | nil => "*"
+      | (symb, pts)::symb_points'
+        => if in_dec eq_nat_dec pt pts
+           then symb
+           else find_symbol_of_point pt symb_points'
+    end.
+
+  Definition string_list_of_nats_with_lines_and_points l lines symb_points :=
     string_list_of_nats (fun x =>
                            match lines with
                              | nil => " "
@@ -69,22 +78,23 @@ Module NatPrinter.
                                               else " "
                            end)
                         (fun x =>
+                           find_symbol_of_point x symb_points(*
                            if in_dec eq_nat_dec x oh_points then "o"
                            else if in_dec eq_nat_dec x bold_points then "●"
-                                else "*")
+                                else "*"*))
                         l.
 
   Ltac print t := let t' := (eval lazy in t) in idtac t'.
   Ltac print_list l := print (string_list_of_nats (fun _ => "") (fun _ => "*") l).
   Ltac print_list_with_lines l lines :=
     print (string_list_of_nats_with_lines l lines).
-  Ltac print_list_with_lines_and_points l lines oh_points bold_points :=
-    print (string_list_of_nats_with_lines_and_points l lines oh_points bold_points).
+  Ltac print_list_with_lines_and_points l lines symb_points :=
+    print (string_list_of_nats_with_lines_and_points l lines symb_points).
   Goal True.
     print_list (1::5::7::15::nil).
     print_list (1::5::7::30::nil).
     print_list_with_lines (1::5::10::18::nil) (11::nil).
     print_list_with_lines (1::5::10::18::nil) (6::11::nil).
-    print_list_with_lines_and_points (1::5::10::18::nil) (6::11::nil) (1::nil) (10::nil).
+    print_list_with_lines_and_points (1::5::10::18::nil) (6::11::nil) (("o", (1::nil))::("●", (10::nil))::nil).
   Abort.
 End NatPrinter.
